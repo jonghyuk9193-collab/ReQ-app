@@ -7,6 +7,36 @@ from fpdf import FPDF
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
+# --- [포맷팅 함수 선언] ---
+def format_phone_str(phone_str):
+    if not phone_str: return ""
+    nums = "".join(filter(str.isdigit, str(phone_str)))
+    if len(nums) == 11: return f"{nums[:3]}-{nums[3:7]}-{nums[7:]}"
+    if len(nums) == 10:
+        if nums.startswith("02"): return f"{nums[:2]}-{nums[2:6]}-{nums[6:]}"
+        return f"{nums[:3]}-{nums[3:6]}-{nums[6:]}"
+    if len(nums) == 9 and nums.startswith("02"): return f"{nums[:2]}-{nums[2:5]}-{nums[5:]}"
+    if len(nums) == 8: return f"{nums[:4]}-{nums[4:]}"
+    return phone_str 
+
+def format_money_str(money_str):
+    if not money_str: return ""
+    nums = "".join(filter(str.isdigit, str(money_str)))
+    return f"{int(nums):,}" if nums else ""
+
+# --- [상태 변경 콜백 함수] ---
+def on_phone_change():
+    st.session_state.hosp_phone = format_phone_str(st.session_state.hosp_phone)
+
+def on_cost_change():
+    st.session_state.cost_val = format_money_str(st.session_state.cost_val)
+
+def on_contract_change():
+    st.session_state.contract_val = format_money_str(st.session_state.contract_val)
+
+def on_extra_phone_change(key):
+    st.session_state[key] = format_phone_str(st.session_state[key])
+
 # --- [DB 설정] ---
 DB_HOST = "dev.mdpeople.co.kr"
 DB_PORT = 13306
@@ -47,9 +77,11 @@ def load_managers():
         pass
     return default_managers
 
-# --- 세션 상태 초기화 (동적 담당자 추가용) ---
-if 'extra_managers' not in st.session_state:
-    st.session_state.extra_managers = []
+# --- 세션 상태 초기화 ---
+if 'extra_managers' not in st.session_state: st.session_state.extra_managers = []
+if 'hosp_phone' not in st.session_state: st.session_state.hosp_phone = ""
+if 'cost_val' not in st.session_state: st.session_state.cost_val = ""
+if 'contract_val' not in st.session_state: st.session_state.contract_val = ""
 
 def add_manager():
     st.session_state.extra_managers.append({"name": "", "phone": ""})
@@ -81,7 +113,6 @@ st.divider()
 # --- 1. 기본 정보 입력 ---
 st.subheader("📋 1. 기본 정보 입력")
 
-# 요청하신 순서대로 배치 (3열 구조)
 col1, col2, col3 = st.columns(3)
 with col1: hospital_name = st.text_input("병원명(필수)*")
 with col2: install_addr = st.text_input("설치 주소")
@@ -95,16 +126,19 @@ with col6: install_time = st.time_input("설치 시간", value=None)
 col7, col8, col9 = st.columns(3)
 with col7: stab_date = st.date_input("안정화 날짜", value=None)
 with col8: hosp_manager = st.text_input("병원 담당자 (이름/직급)")
-with col9: hosp_phone = st.text_input("담당자 연락처 (숫자만)")
+with col9: hosp_phone = st.text_input("담당자 연락처 (숫자만 입력시 자동변환)", key="hosp_phone", on_change=on_phone_change)
 
 col10, col11, col12 = st.columns(3)
-with col10: cost_val = st.number_input("원가 (숫자만)", min_value=0, step=10000)
-with col11: contract_val = st.number_input("계약금액(VAT) (숫자만)", min_value=0, step=10000)
+with col10: cost_input = st.text_input("원가 (숫자만 입력시 자동변환)", key="cost_val", on_change=on_cost_change)
+with col11: contract_input = st.text_input("계약금액(VAT) (숫자만 입력시 자동변환)", key="contract_val", on_change=on_contract_change)
 with col12: 
-    # 할인율 계산 로직
+    # 할인율 계산을 위해 문자열에서 쉼표 제거 후 정수형으로 변환
+    cost_num = int("".join(filter(str.isdigit, cost_input)) or 0)
+    contract_num = int("".join(filter(str.isdigit, contract_input)) or 0)
+    
     discount_rate = 0.0
-    if cost_val > 0:
-        discount_rate = ((cost_val - contract_val) / cost_val) * 100
+    if cost_num > 0:
+        discount_rate = ((cost_num - contract_num) / cost_num) * 100
     st.metric(label="할인율", value=f"{discount_rate:.1f}%")
 
 discount_remark = st.text_input("할인 사유")
@@ -114,10 +148,16 @@ st.button("➕ 추가 담당자 등록", on_click=add_manager)
 extra_manager_data = []
 for i, mgr in enumerate(st.session_state.extra_managers):
     c1, c2 = st.columns(2)
+    phone_key = f"mgr_phone_{i}"
+    
+    # 추가 담당자의 폰번호 초기 상태가 없으면 빈 문자열로 생성
+    if phone_key not in st.session_state:
+        st.session_state[phone_key] = ""
+        
     with c1:
         m_name = st.text_input(f"추가 담당자 이름 {i+1}", key=f"mgr_name_{i}")
     with c2:
-        m_phone = st.text_input(f"추가 담당자 연락처 {i+1}", key=f"mgr_phone_{i}")
+        m_phone = st.text_input(f"추가 담당자 연락처 {i+1} (자동변환)", key=phone_key, on_change=on_extra_phone_change, args=(phone_key,))
     extra_manager_data.append({"name": m_name, "phone": m_phone})
 
 st.divider()
@@ -168,7 +208,6 @@ if use_mdpacs:
         if srv not in ordered_services:
             ordered_services.append(srv)
 
-    # ★ 핵심 변경 포인트: 모바일에서 세로로 읽을 때 순서가 꼬이지 않도록 5개씩 줄(Row)을 새로 만들어서 배치 ★
     for i in range(0, len(ordered_services), 5):
         row_cols = st.columns(5)
         for j in range(5):
@@ -298,9 +337,9 @@ def build_pdf_document():
             pdf.cell(0, 6, f" {mgr['phone']}", border=1, ln=True)
 
     pdf.cell(40, 6, "원가", border=1)
-    pdf.cell(0, 6, f" {cost_val:,} 원", border=1, ln=True)
+    pdf.cell(0, 6, f" {cost_num:,} 원", border=1, ln=True)
     pdf.cell(40, 6, "계약금액(VAT)", border=1)
-    pdf.cell(0, 6, f" {contract_val:,} 원", border=1, ln=True)
+    pdf.cell(0, 6, f" {contract_num:,} 원", border=1, ln=True)
     pdf.cell(40, 6, "할인율", border=1)
     pdf.cell(0, 6, f" {discount_rate:.1f}%", border=1, ln=True)
     
@@ -314,7 +353,6 @@ def build_pdf_document():
     if use_mdpacs:
         pdf.cell(0, 6, "■ MDPACS", ln=True)
         
-        # PDF에서도 H/W 납품을 먼저 출력
         if hw_납품:
             m_txt = "모니터 포함" if hw_monitor else "모니터 미포함"
             p_txt = f" / 납품금액: {hw_price}" if hw_price else ""
