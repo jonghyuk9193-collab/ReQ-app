@@ -155,10 +155,22 @@ if use_mdpacs:
         with hw_col3: hw_monitor = st.checkbox("모니터 포함")
         with hw_col4: hw_price = st.text_input("납품금액")
 
-    # 2. 나머지 부가서비스 배치
-    services = load_services()
+    # 2. 나머지 부가서비스 배치 (요청하신 순서 강제 적용)
+    db_services = load_services()
+    ordered_services = [
+        "Ncloud", "화이트디펜더", "MD마약", "백신온도계", "MD검진", 
+        "법정교육", "케어포미(PHR)", "MDPAD(앱)+의뢰회송", "비대면진료", 
+        "검사실예약", "CDSS", "DeepChest", "MaaD", "옵시", 
+        "해시계", "노티", "팔로", "링크"
+    ]
+    
+    # DB에서 불러온 항목 중 기본 리스트에 없는 항목이 있다면 맨 뒤에 추가
+    for srv in db_services:
+        if srv not in ordered_services:
+            ordered_services.append(srv)
+
     srv_cols = st.columns(5)
-    for i, srv in enumerate(services):
+    for i, srv in enumerate(ordered_services):
         with srv_cols[i % 5]:
             mdpacs_selections[srv] = st.checkbox(srv, key=f"srv_{srv}")
             if srv == "Ncloud" and mdpacs_selections[srv]:
@@ -298,7 +310,7 @@ def build_pdf_document():
     if use_mdpacs:
         pdf.cell(0, 6, "■ MDPACS", ln=True)
         
-        # PDF에서도 H/W 납품을 먼저 출력하도록 순서 변경
+        # PDF에서도 H/W 납품을 먼저 출력
         if hw_납품:
             m_txt = "모니터 포함" if hw_monitor else "모니터 미포함"
             p_txt = f" / 납품금액: {hw_price}" if hw_price else ""
