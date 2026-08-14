@@ -164,17 +164,21 @@ if use_mdpacs:
         "해시계", "노티", "팔로", "링크"
     ]
     
-    # DB에서 불러온 항목 중 기본 리스트에 없는 항목이 있다면 맨 뒤에 추가
     for srv in db_services:
         if srv not in ordered_services:
             ordered_services.append(srv)
 
-    srv_cols = st.columns(5)
-    for i, srv in enumerate(ordered_services):
-        with srv_cols[i % 5]:
-            mdpacs_selections[srv] = st.checkbox(srv, key=f"srv_{srv}")
-            if srv == "Ncloud" and mdpacs_selections[srv]:
-                ncloud_hdd = st.selectbox("Ncloud 용량", ["1TB", "2TB", "3TB", "4TB", "8TB"], key="ncloud_combo")
+    # ★ 핵심 변경 포인트: 모바일에서 세로로 읽을 때 순서가 꼬이지 않도록 5개씩 줄(Row)을 새로 만들어서 배치 ★
+    for i in range(0, len(ordered_services), 5):
+        row_cols = st.columns(5)
+        for j in range(5):
+            idx = i + j
+            if idx < len(ordered_services):
+                srv = ordered_services[idx]
+                with row_cols[j]:
+                    mdpacs_selections[srv] = st.checkbox(srv, key=f"srv_{srv}")
+                    if srv == "Ncloud" and mdpacs_selections[srv]:
+                        ncloud_hdd = st.selectbox("Ncloud 용량", ["1TB", "2TB", "3TB", "4TB", "8TB"], key="ncloud_combo")
     
     mdpacs_remark = st.text_area("MDPACS 비고", height=68)
 
