@@ -58,48 +58,56 @@ def add_manager():
 st.set_page_config(page_title="미라벨소프트 - 설치 의뢰서 생성기", layout="wide")
 st.title("🏥 미라벨소프트 - 설치 의뢰서 생성기")
 
-# 상단 작성자 정보
+# 상단 작성자 정보 (수동입력 기능 추가)
 col_top1, col_top2 = st.columns(2)
 with col_top1:
-    manager_list = ["선택"] + load_managers()
-    manager_val = st.selectbox("영업 담당자", manager_list)
+    manager_list = ["선택", "직접입력"] + load_managers()
+    manager_sel = st.selectbox("영업 담당자", manager_list)
+    if manager_sel == "직접입력":
+        manager_val = st.text_input("영업 담당자 (직접입력)")
+    else:
+        manager_val = "" if manager_sel == "선택" else manager_sel
+
 with col_top2:
-    author_list = ["선택", "정광철", "고일민", "윤재선", "김덕훈", "이종혁", "박건우", "김정수", "정종훈", "임홍근"]
-    author_val = st.selectbox("작성자", author_list)
+    author_list = ["선택", "직접입력", "정광철", "고일민", "윤재선", "김덕훈", "이종혁", "박건우", "김정수", "정종훈", "임홍근"]
+    author_sel = st.selectbox("작성자", author_list)
+    if author_sel == "직접입력":
+        author_val = st.text_input("작성자 (직접입력)")
+    else:
+        author_val = "" if author_sel == "선택" else author_sel
 
 st.divider()
 
 # --- 1. 기본 정보 입력 ---
 st.subheader("📋 1. 기본 정보 입력")
 
-# 3열 구조로 변경
+# 요청하신 순서대로 배치 (3열 구조)
 col1, col2, col3 = st.columns(3)
+with col1: hospital_name = st.text_input("병원명(필수)*")
+with col2: install_addr = st.text_input("설치 주소")
+with col3: biz_num = st.text_input("사업자번호")
 
-with col1:
-    hospital_name = st.text_input("병원명(필수)*")
-    biz_num = st.text_input("사업자번호")
-    install_date = st.date_input("설치 날짜", value=None)
-    hosp_manager = st.text_input("병원 담당자 (이름/직급)")
-    cost_val = st.number_input("원가 (숫자만)", min_value=0, step=10000)
+col4, col5, col6 = st.columns(3)
+with col4: care_num = st.text_input("요양기관번호")
+with col5: install_date = st.date_input("설치 날짜", value=None)
+with col6: install_time = st.time_input("설치 시간", value=None)
 
-with col2:
-    install_addr = st.text_input("설치 주소")
-    care_num = st.text_input("요양기관번호")
-    install_time = st.time_input("설치 시간", value=None)
-    hosp_phone = st.text_input("담당자 연락처 (숫자만)")
-    contract_val = st.number_input("계약금액(VAT) (숫자만)", min_value=0, step=10000)
+col7, col8, col9 = st.columns(3)
+with col7: stab_date = st.date_input("안정화 날짜", value=None)
+with col8: hosp_manager = st.text_input("병원 담당자 (이름/직급)")
+with col9: hosp_phone = st.text_input("담당자 연락처 (숫자만)")
 
-with col3:
-    stab_date = st.date_input("안정화 날짜", value=None)
-    st.write("") # 간격 맞춤
-    st.write("") # 간격 맞춤
-    discount_remark = st.text_input("할인 사유")
-    
+col10, col11, col12 = st.columns(3)
+with col10: cost_val = st.number_input("원가 (숫자만)", min_value=0, step=10000)
+with col11: contract_val = st.number_input("계약금액(VAT) (숫자만)", min_value=0, step=10000)
+with col12: 
     # 할인율 계산 로직
     discount_rate = 0.0
     if cost_val > 0:
         discount_rate = ((cost_val - contract_val) / cost_val) * 100
     st.metric(label="할인율", value=f"{discount_rate:.1f}%")
+
+discount_remark = st.text_input("할인 사유")
 
 # 추가 담당자
 st.button("➕ 추가 담당자 등록", on_click=add_manager)
@@ -138,21 +146,24 @@ hw_price = ""
 
 if use_mdpacs:
     st.write("**■ MDPACS 부가서비스 및 H/W**")
-    services = load_services()
-    srv_cols = st.columns(5)
-    for i, srv in enumerate(services):
-        with srv_cols[i % 5]:
-            # 모든 체크박스는 독립적으로 작동하도록 자동 체크 로직 배제
-            mdpacs_selections[srv] = st.checkbox(srv, key=f"srv_{srv}")
-            if srv == "Ncloud" and mdpacs_selections[srv]:
-                ncloud_hdd = st.selectbox("Ncloud 용량", ["1TB", "2TB", "3TB", "4TB", "8TB"], key="ncloud_combo")
     
+    # 1. H/W 납품 먼저 배치
     hw_col1, hw_col2, hw_col3, hw_col4 = st.columns(4)
     with hw_col1: hw_납품 = st.checkbox("H/W 납품")
     if hw_납품:
         with hw_col2: hw_hdd = st.selectbox("용량", ["1TB", "2TB", "3TB", "4TB", "8TB"])
         with hw_col3: hw_monitor = st.checkbox("모니터 포함")
         with hw_col4: hw_price = st.text_input("납품금액")
+
+    # 2. 나머지 부가서비스 배치
+    services = load_services()
+    srv_cols = st.columns(5)
+    for i, srv in enumerate(services):
+        with srv_cols[i % 5]:
+            mdpacs_selections[srv] = st.checkbox(srv, key=f"srv_{srv}")
+            if srv == "Ncloud" and mdpacs_selections[srv]:
+                ncloud_hdd = st.selectbox("Ncloud 용량", ["1TB", "2TB", "3TB", "4TB", "8TB"], key="ncloud_combo")
+    
     mdpacs_remark = st.text_area("MDPACS 비고", height=68)
 
 migration_company = ""
@@ -235,7 +246,6 @@ def build_pdf_document():
     pdf.set_auto_page_break(auto=True, margin=10)
     pdf.add_page()
     
-    # 웹 환경이므로 폰트 파일이 코드 폴더 내에 있어야 합니다. (malgun.ttf 파일 필요)
     font_path = "malgun.ttf"
     if not os.path.exists(font_path):
         st.error("오류: 코드 폴더에 'malgun.ttf' 폰트 파일이 없습니다. 윈도우 폰트 폴더에서 복사해 넣어주세요.")
@@ -287,15 +297,20 @@ def build_pdf_document():
     
     if use_mdpacs:
         pdf.cell(0, 6, "■ MDPACS", ln=True)
-        sel_svcs = [k for k, v in mdpacs_selections.items() if v]
-        if "Ncloud" in sel_svcs:
-            sel_svcs[sel_svcs.index("Ncloud")] = f"Ncloud ({ncloud_hdd})"
-        pdf.multi_cell(0, 6, f" - 부가서비스: {', '.join(sel_svcs)}")
         
+        # PDF에서도 H/W 납품을 먼저 출력하도록 순서 변경
         if hw_납품:
             m_txt = "모니터 포함" if hw_monitor else "모니터 미포함"
             p_txt = f" / 납품금액: {hw_price}" if hw_price else ""
             pdf.cell(0, 6, f" - H/W 납품: HDD {hw_hdd} / {m_txt}{p_txt}", ln=True)
+            
+        sel_svcs = [k for k, v in mdpacs_selections.items() if v]
+        if "Ncloud" in sel_svcs:
+            sel_svcs[sel_svcs.index("Ncloud")] = f"Ncloud ({ncloud_hdd})"
+        
+        if sel_svcs:
+            pdf.multi_cell(0, 6, f" - 부가서비스: {', '.join(sel_svcs)}")
+            
         if mdpacs_remark:
             pdf.multi_cell(0, 6, f" - 비고: {mdpacs_remark}")
         pdf.ln(2)
@@ -355,7 +370,7 @@ if st.button("💬 Slack으로 전송하기", type="primary", use_container_widt
         pdf = build_pdf_document()
         if pdf:
             today_str = datetime.datetime.now().strftime("%Y%m%d")
-            m_name = manager_val if manager_val != "선택" else "담당자미지정"
+            m_name = manager_val if manager_val else "담당자미지정"
             temp_filename = f"{m_name}_{hospital_name}_{today_str}.pdf"
             
             try:
@@ -371,7 +386,7 @@ if st.button("💬 Slack으로 전송하기", type="primary", use_container_widt
                 if use_other: sel_progs.append("기타장비")
                 progs_text = ", ".join(sel_progs) if sel_progs else "없음"
                 
-                a_name = author_val if author_val != "선택" else "미지정"
+                a_name = author_val if author_val else "미지정"
                 slack_msg = f"설치 의뢰서가 생성되었습니다\n도입프로그램 : {progs_text}\n병원명 : {hospital_name}\n작성자 : {a_name}"
 
                 # 슬랙 전송
